@@ -1,0 +1,27 @@
+# Entorno virtual
+venv/
+.venv/
+
+# Caché de Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Vídeos generados
+videosGenerados/
+
+# Vídeo de prueba / original
+video.MP4
+video.mp4
+
+# Modelos pesados
+modeloBola/
+modeloJugadores/
+
+# Archivos del editor
+.vscode/
+.idea/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db

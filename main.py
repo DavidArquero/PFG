@@ -14,7 +14,6 @@ MODELO_JUGADORES = "modeloJugadores/best.pt"
 MODELO_BOLA = "modeloBola/best.pt"
 CONFIG_ROI = "roi_config.txt"
 CONFIG_CUADRANTES = "cuadrantes_config.txt"
-CONFIG_SAQUE = "saque_config.txt" # Ruta para el punto de saque
 
 # --- CONFIGURACIÓN DE COLORES (BGR) ---
 COL_PISTA    = (200, 200, 200)
@@ -24,14 +23,13 @@ COL_PORTADOR = (0, 255, 0)
 COL_ACCION   = (0, 0, 255)
 COL_PORTERO  = (255, 0, 255)
 COL_ARBITRO  = (0, 165, 255)
-COL_PORTERIA = (255, 255, 0)
-COL_ZONAS    = (0, 255, 255) # Amarillo para líneas de cuadrantes
+COL_ZONAS    = (0, 255, 255) 
 
 def main():
-    # 1. Preparar la zona de juego (ROI), Líneas Tácticas y Punto de Saque
-    # Ahora recibimos tres elementos de la configuración
-    puntos_pista, lineas_cuadrantes, punto_saque = configuracion.gestionar_pista(
-        VIDEO_PATH, CONFIG_ROI, CONFIG_CUADRANTES, CONFIG_SAQUE, recalibrar=False
+    # 1. Preparar la zona de juego (ROI) y Líneas Tácticas
+    # Eliminamos la referencia a saque_config
+    puntos_pista, lineas_cuadrantes = configuracion.gestionar_pista(
+        VIDEO_PATH, CONFIG_ROI, CONFIG_CUADRANTES, recalibrar=False
     )
     
     cap = cv2.VideoCapture(VIDEO_PATH)
@@ -79,50 +77,36 @@ def main():
 
             # --- PROCESAMIENTO DE LÓGICA TÁCTICA ---
             jugadores_pista = logica.filtrar_jugadores_en_pista(res_jugadores, mascara_pista)
-
             portador_id, pos_bola, estado_posesion = logica.validar_posesion(
                 bolas_detectadas, jugadores_pista, estado_posesion
             )
 
-            # Si el sistema confirma un portador nuevo, lo grabamos en la memoria
             if portador_id is not None:
                 ultimo_portador_id = portador_id
 
-            # --- LÓGICA DE SAQUE MANUAL (TECLA 'S') ---
-            # Detectamos si se presiona 's' para forzar la posición al punto de saque
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('s'):
-                pos_bola = punto_saque
-                # Al resetear al saque, también podemos limpiar la inercia para evitar tirones
-                inercia_estado = (punto_saque, [0, 0], 0)
-
-            # Actualizamos la llamada para incluir lineas_cuadrantes
+            # --- CÁLCULO DEL CENTRO DE ACCIÓN ---
             centro_datos, radio, zonas_activas, inercia_estado = logica.calcular_centro_y_radio(
                 pos_bola, 
                 jugadores_pista, 
                 lineas_cuadrantes, 
                 mascara_pista, 
                 inercia_estado, 
-                portador_id,         # El que la tiene ahora (si existe)
-                ultimo_portador_id   # El último que la tuvo (por si acaso)
+                portador_id,         
+                ultimo_portador_id   
             )
 
             # --- DIBUJO POR CAPAS ---
             frame_out = frame.copy()
             
-            # CAPA 1: Centro de Acción y Zonas Tácticas (Sobre el suelo)
+            # CAPA 1: Centro de Acción y Zonas (Sobre el parqué)
             capa_suelo = frame_out.copy()
-            
             for p1, p2 in lineas_cuadrantes:
                 cv2.line(capa_suelo, p1, p2, COL_ZONAS, 2, lineType=cv2.LINE_AA)
 
             if centro_datos:
                 fx, fy = centro_datos
-                puntos_organicos = radio
-                
-                cv2.polylines(capa_suelo, [puntos_organicos], isClosed=True, color=COL_ACCION, thickness=4, lineType=cv2.LINE_AA)
+                cv2.polylines(capa_suelo, [radio], True, COL_ACCION, 4, cv2.LINE_AA)
                 cv2.drawMarker(capa_suelo, (fx, fy), COL_ACCION, cv2.MARKER_CROSS, 40, 3)
-                
                 frame_out = np.where(mascara_pista[:, :, None] == 255, capa_suelo, frame_out)
 
             # CAPA 2: Límites ROI
@@ -156,7 +140,6 @@ def main():
             # --- REDIMENSIÓN Y TELEMETRÍA ---
             frame_final = cv2.resize(frame_out, (display_w, display_h))
 
-            # Panel de información táctica
             cv2.rectangle(frame_final, (10, 10), (400, 120), (0,0,0), -1)
             cv2.rectangle(frame_final, (10, 10), (400, 120), (255,255,255), 1)
             
@@ -168,8 +151,7 @@ def main():
             out.write(frame_final)
             cv2.imshow("Analizador Tactico Hockey", frame_final)
 
-            # Salir con 'q'
-            if key == ord('q'):
+            if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
 
     cap.release()
